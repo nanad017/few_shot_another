@@ -1,0 +1,40 @@
+# Hyperparameters from the paper (Sec. IV-B) unless noted.
+model:
+  hidden_dim: 128          # embedding size 128
+  num_layers: 4            # GAT layers K = 4
+  proj_dim: 128
+  dropout: 0.1
+
+train:
+  lr: 0.005                # Adam
+  weight_decay: 0.00001    # decay 1e-5
+  batch_size: 64
+  epochs: 100
+  temperature: 0.07        # tau
+  momentum1: 0.99          # lambda_1 (GAT_p / MLP_p)
+  momentum2: 0.99          # lambda_2 (GAT_q / MLP_q)
+  negatives: 16            # n negatives per anchor, drawn from the batch
+  seed: 42
+
+augment:
+  pgd:
+    instances: 2           # paper picks k = 2 PGD attacks (Sec. IV-D4)
+    epsilon: 0.05
+    steps: 2
+  mask:
+    ratio: 0.3             # masking ratio r = 30% (Sec. IV-D1)
+    mu: 0.0
+    sigma: 0.1
+  sampling:
+    enabled: true
+    num_metagraphs: 2
+  dsc:
+    enabled: true
+  obfuscation:
+    enabled: true
+    garbage_nodes: 3
+
+eval:
+  episodes: 10             # paper reports the average of 10 runs
+  shots: [1, 10]
+  query_per_family: 15
