@@ -17,6 +17,8 @@ Re-implementation của bài báo:
 | E. Drift detection | `src/qproto/drift.py` | T=6 splits thời gian, train tích lũy 100 episodes, đánh giá 50 episodes, Δ(t)=(A(1)−A(t))/A(1)·100, cảnh báo khi Δ > 15% |
 
 Toàn bộ hyperparameters (Table 3) nằm trong `src/qproto/config.py`, seed=42.
+Nhánh quantum dùng Adam + StepLR (1000, γ=0.5) và nhận `n_qubits`, `alpha`
+từ hàm train thay vì dùng giá trị ẩn trong model.
 
 ## Ghi chú so với bài báo
 

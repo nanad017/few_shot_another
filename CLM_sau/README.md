@@ -110,9 +110,10 @@ Tuỳ chọn: `--cpu` (ép dùng torch CPU), `--no-test` (bỏ qua smoke test).
 
 ## Ghi chú cài đặt (khác biệt so với bài báo)
 
-- Meta-graph Fig. 4 chỉ được vẽ dưới dạng hình; ở đây mỗi M_i được mã hoá
-  bằng tập quan hệ + đường kính pattern (`schema.py`), lân cận meta-graph
-  lấy bằng BFS giới hạn theo quan hệ — xấp xỉ sát ngữ nghĩa Eq. 6.
+- Meta-graph Fig. 4 được mã hoá thành các path có hướng trong `schema.py`;
+  M5/M6 còn kiểm tra resource phải được dùng chung bởi cả hai process. Vì vậy
+  lân cận meta-graph bám theo thứ tự và hướng cạnh của Eq. 6 thay vì chỉ lọc
+  theo tập tên quan hệ.
 - Attention giữa các meta-graph (Eq. 11) cài theo dạng semantic attention
   chuẩn HAN vì công thức trong bài không định nghĩa đầy đủ ký hiệu.
 - Obfuscation attack thao tác trên graph (thay API độc hại bằng chuỗi API

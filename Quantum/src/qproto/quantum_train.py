@@ -12,11 +12,25 @@ from .quantum import HybridQuantumClassifier
 
 
 def train_quantum_classifier(X_train, y_train, X_val, y_val, n_classes,
-                             epochs=30, batch_size=256, lr=1e-3, seed=42,
-                             device="cpu", verbose=True):
+                             epochs=4000, batch_size=256, lr=1e-3, seed=42,
+                             lr_step=1000, lr_gamma=0.5, n_qubits=4,
+                             alpha=0.5, post_hidden=16, device="cpu",
+                             verbose=True):
+    """Train the paper's alternative quantum classification pathway.
+
+    The paper lists the same Adam + StepLR schedule as the main framework.
+    ``epochs`` is configurable so smoke tests and CPU experiments can use a
+    short run without changing the default paper configuration.
+    """
     torch.manual_seed(seed)
-    model = HybridQuantumClassifier(X_train.shape[1], n_classes).to(device)
+    model = HybridQuantumClassifier(
+        X_train.shape[1], n_classes, n_qubits=n_qubits, alpha=alpha,
+        post_hidden=post_hidden,
+    ).to(device)
     opt = torch.optim.Adam(model.parameters(), lr=lr)
+    sched = torch.optim.lr_scheduler.StepLR(
+        opt, step_size=lr_step, gamma=lr_gamma
+    )
 
     Xt = torch.as_tensor(X_train, dtype=torch.float32, device=device)
     yt = torch.as_tensor(y_train, dtype=torch.long, device=device)
@@ -33,6 +47,7 @@ def train_quantum_classifier(X_train, y_train, X_val, y_val, n_classes,
             loss.backward()
             opt.step()
             total += float(loss.item()) * len(idx)
+        sched.step()
         if verbose and (epoch % 5 == 0 or epoch == epochs):
             model.eval()
             with torch.no_grad():

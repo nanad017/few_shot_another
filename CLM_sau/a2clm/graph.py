@@ -52,28 +52,58 @@ class SHGFM:
 
     # ---------------------------------------------------- meta-graph views
     def metagraph_neighborhood(self, mg: MetaGraph) -> Set[int]:
-        """Eq. 6: nodes visited when the target process walks along M_i
-        (BFS through edges whose base relation belongs to M_i, bounded by
-        the pattern diameter)."""
-        allowed = {RELATION_INDEX[r] for r in mg.relations}
-        base = self.edge_types % NUM_RELATIONS
-        keep = torch.isin(base, torch.tensor(sorted(allowed),
-                                             device=self.edge_types.device))
-        ei = self.edge_index[:, keep]
-        adj: Dict[int, List[int]] = {}
-        for s, d in ei.t().tolist():
-            adj.setdefault(s, []).append(d)
-        frontier, visited = {self.target}, {self.target}
-        for _ in range(mg.diameter):
-            nxt = set()
-            for u in frontier:
-                for v in adj.get(u, ()):  # mirrored edges make this symmetric
-                    if v not in visited:
-                        visited.add(v)
-                        nxt.add(v)
-            frontier = nxt
-            if not frontier:
-                break
+        """Eq. 6: follow the ordered, typed walks of the meta-graph.
+
+        Filtering only by a set of relation names allows invalid walks such
+        as ``process -> child process -> registry`` to enter the shared-
+        registry pattern. Matching each directed path preserves the schema
+        semantics in Fig. 4 while still allowing multiple matching branches.
+        """
+        adjacency: Dict[Tuple[int, int, int], List[int]] = {}
+        for s, d, et in zip(self.edge_index[0].tolist(),
+                             self.edge_index[1].tolist(),
+                             self.edge_types.tolist()):
+            adjacency.setdefault((s, d, et), []).append(d)
+
+        visited = {self.target}
+        if mg.shared_relation is not None:
+            # M5/M6 are join patterns: P1 --fork--> P2 and both processes
+            # point to the same resource. A union of independent walks would
+            # also admit resources used by only one of the processes.
+            fork_type = RELATION_INDEX["fork"]
+            shared_type = RELATION_INDEX[mg.shared_relation]
+            children = set()
+            resources_from_target = set()
+            resources_by_child: Dict[int, Set[int]] = {}
+            for (src, dst, et) in adjacency:
+                if src == self.target and et == fork_type:
+                    children.add(dst)
+                if src == self.target and et == shared_type:
+                    resources_from_target.add(dst)
+            for child in children:
+                resources_by_child[child] = {
+                    dst for (src, dst, et) in adjacency
+                    if src == child and et == shared_type
+                }
+            visited.update(children)
+            for resources in resources_by_child.values():
+                visited.update(resources_from_target & resources)
+            return visited
+
+        for walk in mg.walks:
+            frontier = {self.target}
+            for relation, direction in walk:
+                rid = RELATION_INDEX[relation]
+                edge_type = rid if direction > 0 else rid + NUM_RELATIONS
+                nxt = set()
+                for u in frontier:
+                    for (src, _dst, et), destinations in adjacency.items():
+                        if src == u and et == edge_type:
+                            nxt.update(destinations)
+                visited.update(nxt)
+                frontier = nxt
+                if not frontier:
+                    break
         return visited
 
     def metagraph_edges(self, mg_idx: int) -> Tuple[torch.Tensor, torch.Tensor]:

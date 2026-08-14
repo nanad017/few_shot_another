@@ -3,9 +3,9 @@
 7 entity types, 8 canonical relations and 8 meta-graphs. The meta-graphs in
 Fig. 4 are drawn as small patterns anchored at process nodes (fork chains,
 shared API / registry / memory / file / system / network objects, and the
-network-download-file chain); we encode each one as the set of relations it
-uses plus its diameter, which drives both the meta-graph-guided neighborhood
-(Eq. 6) and the per-meta-graph encoder subgraphs (Eq. 8-10).
+network-download-file chain). Each pattern is encoded as one or more ordered,
+directed walks so Eq. 6 cannot admit unrelated paths that merely reuse the
+same relation names.
 """
 
 from dataclasses import dataclass
@@ -40,21 +40,45 @@ TYPE_PAIR_TO_RELATION: Dict[Tuple[str, str], str] = {
 @dataclass(frozen=True)
 class MetaGraph:
     name: str
-    relations: Tuple[str, ...]  # base relations the pattern uses
-    diameter: int               # walk depth from the target process node
+    # Each walk is a sequence of (relation, direction) steps. Direction +1
+    # follows the canonical relation; -1 follows its mirrored edge.
+    walks: Tuple[Tuple[Tuple[str, int], ...], ...]
+    # M5/M6 are fork-plus-shared-resource patterns. The resource must be
+    # reachable from both processes, not merely from either process.
+    shared_relation: str | None = None
+
+    @property
+    def relations(self) -> Tuple[str, ...]:
+        """Base relations used by the pattern, kept for encoder filtering."""
+        return tuple(dict.fromkeys(
+            relation for walk in self.walks for relation, _ in walk
+        ))
+
+    @property
+    def diameter(self) -> int:
+        return max((len(walk) for walk in self.walks), default=0)
 
 
 # Fig. 4: eight meta-graphs M1..M8.
 META_GRAPHS: List[MetaGraph] = [
-    MetaGraph("M1_fork_chain", ("fork",), 2),                    # P -f-> P -f-> P
-    MetaGraph("M2_shared_registry", ("fork", "set"), 2),          # P -s-> R <-s- P
-    MetaGraph("M3_shared_api", ("fork", "call"), 2),              # P -c-> A <-c- P
-    MetaGraph("M4_shared_memory", ("fork", "read"), 2),           # P -r-> M <-r- P
-    MetaGraph("M5_fork_shared_file", ("fork", "access"), 2),      # P -f-> P, both -a-> F
-    MetaGraph("M6_shared_network", ("fork", "connect"), 2),       # P -cn-> N <-cn- P
-    MetaGraph("M7_shared_system", ("fork", "open"), 2),           # P -o-> S <-o- P
-    MetaGraph("M8_download_chain", ("connect", "download", "access"), 3),
-    #                                                             P -cn-> N -d-> F <-a- P
+    MetaGraph("M1_fork", ((("fork", +1),),)),
+    MetaGraph("M2_shared_registry", ((("set", +1), ("set", -1)),)),
+    MetaGraph("M3_shared_api", ((("call", +1), ("call", -1)),)),
+    MetaGraph("M4_shared_memory", ((("read", +1), ("read", -1)),)),
+    MetaGraph("M5_fork_shared_file", (
+        (("fork", +1),),
+        (("access", +1),),
+        (("fork", +1), ("access", +1)),
+    ), shared_relation="access"),
+    MetaGraph("M6_shared_network", (
+        (("fork", +1),),
+        (("connect", +1),),
+        (("fork", +1), ("connect", +1)),
+    ), shared_relation="connect"),
+    MetaGraph("M7_shared_system", ((("open", +1), ("open", -1)),)),
+    MetaGraph("M8_download_chain", (
+        (("connect", +1), ("download", +1), ("access", -1)),
+    )),
 ]
 NUM_META_GRAPHS = len(META_GRAPHS)
 

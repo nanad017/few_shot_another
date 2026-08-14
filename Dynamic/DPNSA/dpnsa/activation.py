@@ -44,24 +44,12 @@ class DualSampleActivation(nn.Module):
         num_funcs: int = 2,
         reduction: int = 8,
         variant: str = "ds1",
-        lambda_a: float = 1.0,
-        lambda_b: float = 0.5,
     ):
         super().__init__()
         assert variant in ("ds1", "ds2")
         self.channels = channels
         self.num_funcs = num_funcs
         self.variant = variant
-        self.lambda_a = lambda_a
-        self.lambda_b = lambda_b
-
-        # Identity initialisation of the piecewise-linear components:
-        # first component starts as y = x, the rest as y = 0, so training
-        # begins from a ReLU-like transformation.
-        init_a = torch.zeros(num_funcs)
-        init_a[0] = 1.0
-        self.register_buffer("init_a", init_a)
-        self.register_buffer("init_b", torch.zeros(num_funcs))
 
         self.spatial_attn = SpatialAttention() if variant == "ds2" else None
         self.corr_conv = nn.Sequential(
@@ -89,9 +77,10 @@ class DualSampleActivation(nn.Module):
         x = F.adaptive_avg_pool2d(x, 1).flatten(1)
         x = F.relu(self.fc1(x), inplace=True)
         x = self.fc2(x)
-        # Normalisation layer: squash to (-1, 1) so parameters stay a
-        # bounded residual around the identity initialisation.
-        x = 2.0 * torch.sigmoid(x) - 1.0
+        # Fig. 4 applies a normalization layer to the generated activation
+        # parameters before using them as the dual-sample Dynamic-ReLU
+        # coefficients. Normalize the complete (a, b) vector per pair.
+        x = F.normalize(x, p=2, dim=1, eps=1e-6)
         return x.view(-1, 2, self.num_funcs, self.channels)
 
     def _activate(self, x: torch.Tensor, a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
@@ -107,8 +96,8 @@ class DualSampleActivation(nn.Module):
         q, p: (B, C, H, W) -> activated, pooled (B, C, H/2, W/2) each.
         """
         theta = self._hyper(q, p)  # (B, 2, F, C)
-        a = self.init_a.view(1, -1, 1) + self.lambda_a * theta[:, 0]  # (B, F, C)
-        b = self.init_b.view(1, -1, 1) + self.lambda_b * theta[:, 1]
+        a = theta[:, 0]  # (B, F, C)
+        b = theta[:, 1]
         q_out = self.post(self._activate(q, a, b))
         p_out = self.post(self._activate(p, a, b))
         return q_out, p_out

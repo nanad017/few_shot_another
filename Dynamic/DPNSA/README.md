@@ -18,6 +18,8 @@ Cài đặt lại PyTorch của bài báo:
 4. **Dual-sample dynamic activation** (Fig. 3–4, Eq. 1–2) — hyper function
    α(Q′, Pₙ) sinh tham số (aᶜᶠ, bᶜᶠ) theo từng channel;
    kích hoạt `max_f(a·x + b)` cho cả query lẫn prototype, rồi conv + maxpool.
+   DS1 chuẩn hóa vector tham số sinh ra trước khi áp dụng, đúng bước
+   normalization trong Fig. 4a.
    Hai biến thể: `ds1` (mặc định, tốt hơn theo Table 4) và `ds2`
    (thêm spatial attention).
 5. **Metric** — cosine distance, softmax(−d) (Eq. 3), NLL loss (Eq. 4).
